@@ -1,11 +1,14 @@
 import java.net.*;
 import java.io.*;
+import java.util.concurrent.atomic.AtomicInteger;
   
 public class Server { 
 	public static void main(String[] args) throws IOException {
 		Deck deck = new Deck();
+        Hand hand = new Hand();
 		deck.shuffle();
 		ServerSocket ss = new ServerSocket(7777);
+        AtomicInteger client_num = new AtomicInteger();
       	while (true) {
       		Socket s = null;
       		try {
@@ -15,13 +18,15 @@ public class Server {
       			DataInputStream dis = new DataInputStream(s.getInputStream()); 
                 DataOutputStream dos = new DataOutputStream(s.getOutputStream()); 
 
-      			Thread t = new ClientHandler(s, dis, dos, deck);
+                client_num.incrementAndGet();
+      			Thread t = new ClientHandler(s, dis, dos, deck, hand, client_num);
       			t.start();
       		}
       		catch (Exception e) {
       			s.close();
       			e.printStackTrace();
       		}
+            System.out.println("Total " + client_num + " clients"); 
       	}
 	}
 }
@@ -32,20 +37,21 @@ class ClientHandler extends Thread {
     private final Socket s;
     private Deck deck;
     private Hand bank_hand;
-
-    public ClientHandler(Socket s, DataInputStream dis, DataOutputStream dos, Deck deck) {
+    public AtomicInteger client_counter;  		
+        		
+    public ClientHandler(Socket s, DataInputStream dis, DataOutputStream dos, Deck deck, Hand hand, AtomicInteger ctr) {
     	this.s = s; 
         this.dis = dis; 
         this.dos = dos;
         this.deck = deck;
-        bank_hand = new Hand();
+        this.client_counter = ctr;
+        bank_hand = hand;
     }
 
     @Override
     public void run() {
     	String received; 
         String toreturn;
-
         try {
         	dos.writeUTF("Hello from server!");
         	loop: while (true) {
@@ -53,10 +59,11 @@ class ClientHandler extends Thread {
         		switch (dis.readUTF()) {
         			case "Exit":
         				System.out.println("Client " + s + " connection closed"); 
+                        client_counter.decrementAndGet();
                     	s.close(); 
                     	break loop;
                     case "New game":
-                    	deck = new Deck();
+                    	//deck = new Deck();
                     	deck.shuffle();
                     	bank_hand.clear();
                     	bank_hand.takeCard(deck.getCard());
@@ -92,7 +99,6 @@ class ClientHandler extends Thread {
                     default:
                     	System.out.println("Unknown command"); 
         		}
-        		
         	}
 
         	dis.close(); 
